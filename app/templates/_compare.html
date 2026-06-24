@@ -1,0 +1,29 @@
+{# Side-by-side comparison of two runs, dropped into the console stream. #}
+<div class="run-row compare-card">
+  <div class="run-meta">
+    <span class="badge done">compare</span>
+    <span class="rtool">{{ cols[0].run.tool }} vs {{ cols[1].run.tool }}</span>
+    <button type="button" class="cmp-close" title="Dismiss"
+            onclick="this.closest('.run-row').remove()">&times;</button>
+  </div>
+  <div class="cmp-grid">
+    {% for c in cols %}
+    <div class="cmp-col">
+      <div class="cmp-head">
+        <span class="badge {{ c.run.status }}">{{ c.run.status }}</span>
+        <span class="rtarget">{{ c.run.target }}</span>
+        <span class="rid">#{{ c.run.id }}</span>
+      </div>
+      <div class="cmp-when mono">{{ c.run.started_at[:19].replace('T',' ') }}</div>
+      {% if c.summary %}
+      <div class="summary">
+        {% for label, value in c.summary %}
+        <div class="stat"><span class="s-val">{{ value }}</span><span class="s-lab">{{ label }}</span></div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <pre class="run-out">{{ c.output or "(no output)" }}</pre>
+    </div>
+    {% endfor %}
+  </div>
+</div>

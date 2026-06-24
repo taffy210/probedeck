@@ -1,0 +1,21 @@
+{# Incident log table. Shared by dashboard and monitor detail. #}
+{% if incidents %}
+<table class="inc-table">
+  <thead><tr><th>monitor</th><th>reason</th><th>started</th><th>duration</th><th>peak</th><th></th></tr></thead>
+  <tbody>
+  {% for i in incidents %}
+    <tr class="{% if not i.resolved_at %}inc-open{% endif %}">
+      <td>{% if i.monitor_label %}<a href="/monitors/{{ i.monitor_id }}">{{ i.monitor_label }}</a>{% else %}#{{ i.monitor_id }}{% endif %}</td>
+      <td><span class="inc-reason r-{{ i.reason }}">{{ i.reason or 'down' }}</span>
+        {% if i.detail %}<div class="inc-detail mono">{{ i.detail }}</div>{% endif %}</td>
+      <td class="mono inc-when">{{ i.started_at[:19]|replace('T',' ') }}</td>
+      <td class="mono">{{ '—' if i.reason == 'drift' else (i.duration or '—') }}</td>
+      <td class="mono">{{ '%g'|format(i.peak) if i.peak is not none else '' }}</td>
+      <td>{% if i.reason == 'drift' %}<span class="inc-state">event</span>{% elif i.resolved_at %}<span class="inc-state ok">resolved</span>{% else %}<span class="inc-state bad">ongoing</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty small" style="padding:16px">No incidents recorded. All clear.</p>
+{% endif %}

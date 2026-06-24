@@ -1,0 +1,22 @@
+{# Saved target profiles. Click a row to load it into the probe form
+   (fills target + selects a sensible tool for its kind); ▷ runs it now. #}
+{% if profiles %}
+<ul class="profiles">
+  {% for p in profiles %}
+  <li>
+    <button type="button" class="prow" data-pval="{{ p.value }}" data-pkind="{{ p.kind }}"
+            title="load into probe">
+      <span class="pkind">{{ p.kind }}</span>
+      <span class="pname">{{ p.name }}</span>
+      <span class="pval mono">{{ p.value }}</span>
+    </button>
+    <button type="button" class="prun" data-pval="{{ p.value }}" data-pkind="{{ p.kind }}"
+            title="run now">▷</button>
+    <button type="button" class="pdel" hx-post="/profiles/{{ p.id }}/delete"
+            hx-target="#profiles" hx-swap="innerHTML" title="remove">×</button>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="empty small">No saved targets. Add your gateway, iperf server, resolvers — then click one to load it.</p>
+{% endif %}

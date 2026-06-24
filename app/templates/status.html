@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Status · ProbeDeck</title>
+  <script src="/static/htmx.min.js"></script>
+  <link rel="stylesheet" href="/static/app.css">
+  <meta name="theme-color" content="#0f1115">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" href="/static/icon-192.png">
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+  <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){});});}</script>
+</head>
+<body class="status-page">
+<div class="frame narrow">
+  <header class="status-top">
+    <div class="brand">
+      <span class="dot"></span>
+      <span class="name">ProbeDeck</span>
+      <span class="sub">service status</span>
+    </div>
+  </header>
+
+  <section class="panel">
+    <div id="board" hx-get="/statusbars" hx-trigger="every 30s">
+      {% include "_statusboard.html" %}
+    </div>
+  </section>
+
+  <p class="status-foot mono">auto-refreshes every 30s</p>
+</div>
+<script>
+function stamp(){
+  const el = document.getElementById('sb-updated');
+  if (el) el.textContent = 'updated ' + new Date().toISOString().replace('T',' ').slice(0,19) + 'Z';
+}
+stamp();
+document.body.addEventListener('htmx:afterSwap', stamp);
+</script>
+</body>
+</html>

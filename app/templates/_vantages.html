@@ -1,0 +1,27 @@
+{# Vantage management: register agents, see last-seen + their run command. #}
+<form class="vant-add" hx-post="/vantages" hx-target="#vantages" hx-swap="innerHTML">
+  <input name="name" placeholder="name (e.g. london)" required>
+  <input name="location" placeholder="location (optional)">
+  <button class="mon-btn" type="submit">+ vantage</button>
+</form>
+
+{% if vantages %}
+<table class="vant-table">
+  <thead><tr><th>vantage</th><th>last seen</th><th>agent command</th><th></th></tr></thead>
+  <tbody>
+  {% for v in vantages %}
+  <tr>
+    <td><span class="vant-name">{{ v.name }}</span>{% if v.location %}<span class="vloc">{{ v.location }}</span>{% endif %}</td>
+    <td class="mono small">{{ v.last_seen[:19]|replace('T',' ') if v.last_seen else '— never' }}</td>
+    <td><code class="agent-cmd">PROBEDECK_URL={{ base_url }} PROBEDECK_TOKEN={{ v.token }} python3 agent.py</code></td>
+    <td><button type="button" class="micon del" title="Delete vantage"
+                hx-post="/vantages/{{ v.id }}/delete" hx-target="#vantages"
+                hx-swap="innerHTML" hx-confirm="Delete this vantage? Its agent will stop receiving jobs.">&times;</button></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="hint">Grab the agent: <a href="/agent.py" download>agent.py</a> — stdlib-only Python 3, no root. Drop it on a remote host and run the command above.</p>
+{% else %}
+<p class="empty small" style="padding:8px 2px">No vantages yet. Add one, then run <a href="/agent.py" download>agent.py</a> on a remote host with the command it generates.</p>
+{% endif %}

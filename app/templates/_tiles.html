@@ -1,0 +1,30 @@
+{# Status board: one tile per monitor, colour-coded, links to detail. #}
+{% if monitors %}
+<div class="tiles">
+  {% for v in monitors %}
+  {% set m = v.m %}
+  <a class="tile s-{{ v.status }} {% if not m.enabled %}paused{% endif %}"
+     href="/monitors/{{ m.id }}">
+    <div class="tile-top">
+      <span class="tile-dot"></span>
+      <span class="tile-label">{{ m.label }}</span>
+    </div>
+    <div class="tile-read">
+      {% if v.latest and v.latest.value is not none %}
+        <span class="tile-val">{{ '%g'|format(v.latest.value) }}<span class="tile-unit">{{ v.unit }}</span></span>
+      {% elif v.status == 'down' %}
+        <span class="tile-val down">down</span>
+      {% else %}
+        <span class="tile-val idle">—</span>
+      {% endif %}
+    </div>
+    <div class="tile-foot">
+      <span>{{ m.tool }}</span>
+      {% if v.uptime is not none %}<span class="tile-up">{{ '%g'|format(v.uptime) }}% up</span>{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<p class="empty">No monitors yet. Add one from the probe panel on the home page.</p>
+{% endif %}

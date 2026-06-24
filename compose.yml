@@ -1,0 +1,22 @@
+services:
+  probedeck:
+    build: .
+    container_name: probedeck
+    # Host network so probes run from the host's real vantage point:
+    # actual routing table, VLAN interfaces, no bridge NAT in the path.
+    network_mode: host
+    cap_add:
+      - NET_RAW      # mtr, ping, nmap raw sockets
+      - NET_ADMIN    # tcpdump packet capture
+    volumes:
+      - ./data:/data
+    environment:
+      - PROBEDECK_DATA=/data
+      # Optional login. Set BOTH to require a sign-in; leave unset for
+      # the no-auth LAN default. Anyone who reaches the UI can run nmap/tcpdump
+      # from the host, so enable this if it's reachable beyond a trusted subnet.
+      # - PROBEDECK_AUTH_USER=admin
+      # - PROBEDECK_AUTH_PASS=change-me
+    restart: unless-stopped
+    # With host networking the app listens on 0.0.0.0:8080 on the host.
+    # Bind it to LAN only and/or front it with auth. See README.

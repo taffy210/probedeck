@@ -1,0 +1,33 @@
+{# Path insight result card: traceroute hops annotated with ASN / owner / geo. #}
+<div class="run-row pathins">
+  <div class="run-meta">
+    <span class="badge {{ 'done' if res.reached else 'timeout' }}">
+      {{ 'reached' if res.reached else 'no reply' }}</span>
+    <span class="rtool">path insight</span>
+    <span class="rtarget">{{ res.target }}</span>
+    <span class="rid">{{ res.hops|length }} hops · {{ res.networks|length }} networks</span>
+    <button type="button" class="cmp-close" onclick="this.closest('.run-row').remove()" title="close">&times;</button>
+  </div>
+  {% if res.networks %}
+  <div class="path-nets">
+    {% for n in res.networks %}
+    <span class="path-net">AS{{ n.asn }}{% if n.cc %} · {{ n.cc }}{% endif %}<span class="path-net-owner">{{ n.owner }}</span></span>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <table class="path-table">
+    <thead><tr><th>#</th><th>ip</th><th>asn</th><th>network</th><th>cc</th><th>rtt</th></tr></thead>
+    <tbody>
+    {% for h in res.hops %}
+      <tr class="{% if h.boundary %}path-boundary{% endif %} {% if h.timeout %}path-timeout{% endif %}">
+        <td class="path-hop">{{ h.hop }}</td>
+        <td class="mono">{{ h.ip or '*' }}</td>
+        <td class="mono">{{ 'AS' ~ h.asn if h.asn else '' }}</td>
+        <td class="path-owner">{{ h.owner or '' }}</td>
+        <td class="mono">{{ h.cc or '' }}</td>
+        <td class="mono">{{ h.rtt ~ ' ms' if h.rtt else '' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>

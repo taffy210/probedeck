@@ -1,0 +1,34 @@
+{# Multi-vantage check card. Polls itself while remote vantages are pending. #}
+<div class="run-row vantage-card"
+     {% if v.pending %}hx-get="/checks/{{ v.check.id }}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  <div class="run-meta">
+    <span class="badge {{ 'running' if v.pending else 'done' }}">{{ v.reachable }}/{{ v.total }} reachable</span>
+    <span class="rtool">vantage · {{ v.check.tool }}</span>
+    <span class="rtarget">{{ v.check.target }}</span>
+    {% if v.pending %}<span class="rid">{{ v.pending }} pending…</span>{% endif %}
+    <button type="button" class="cmp-close" onclick="this.closest('.run-row').remove()" title="close">&times;</button>
+  </div>
+  <table class="vtable">
+    <thead><tr><th>vantage</th><th>result</th><th>value</th></tr></thead>
+    <tbody>
+    {% for r in v.rows %}
+      <tr class="vstate-{{ r.status }}">
+        <td class="vname">
+          {% if r.central %}<span class="vcentral">★</span>{% endif %}{{ r.name }}
+          {% if r.loc %}<span class="vloc">{{ r.loc }}</span>{% endif %}
+        </td>
+        <td>
+          {% if r.status in ('pending', 'running') %}<span class="dim">… waiting</span>
+          {% elif r.status == 'noresponse' %}<span class="dim">no response</span>
+          {% elif r.ok %}<span class="ok">&#9679; reachable</span>
+          {% else %}<span class="bad">&#9679; unreachable</span>{% endif %}
+        </td>
+        <td class="mono">{% if r.value is not none %}{{ '%g'|format(r.value) }}{{ r.unit }}{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if v.total == 1 %}
+  <p class="hint" style="padding:2px 2px 0">Only the central vantage ran — add remote vantages on the dashboard to compare locations.</p>
+  {% endif %}
+</div>

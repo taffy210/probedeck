@@ -1,0 +1,36 @@
+{# DNS propagation result card, rendered into the console stream. #}
+<div class="run-row dnsprop">
+  <div class="run-meta">
+    <span class="badge {{ 'done' if res.in_sync else 'timeout' }}">
+      {{ 'in sync' if res.in_sync else '%d answers'|format(res.distinct) }}</span>
+    <span class="rtool">dns propagation</span>
+    <span class="rtarget">{{ res.domain }}</span>
+    <span class="rid">{{ res.rtype }}</span>
+    <button type="button" class="cmp-close" onclick="this.closest('.run-row').remove()" title="close">&times;</button>
+  </div>
+  <div class="run-cmd">
+    {{ res.responded }}/{{ res.total }} resolvers answered ·
+    {% if res.in_sync %}all agree{% else %}<span class="warn">{{ res.distinct }} distinct answer sets — propagation in progress</span>{% endif %}
+  </div>
+  <table class="dnsp-table">
+    <thead><tr><th>resolver</th><th>answer</th><th>rtt</th><th></th></tr></thead>
+    <tbody>
+    {% for r in res.results %}
+      <tr class="state-{{ r.state }}">
+        <td class="dnsp-res">
+          {{ r.label }}
+          {% if r.kind == 'authoritative' %}<span class="dnsp-auth">auth</span>{% endif %}
+          <span class="dnsp-ip">{{ r.resolver }}</span>
+        </td>
+        <td class="dnsp-ans">{{ r.answers|join(', ') if r.answers else '—' }}</td>
+        <td class="dnsp-rtt">{{ '%dms'|format(r.ms) if r.ms is not none else '' }}</td>
+        <td class="dnsp-mark">
+          {% if r.state == 'match' %}<span class="ok">✓</span>
+          {% elif r.state == 'differs' %}<span class="bad">≠</span>
+          {% else %}<span class="dim">·</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>

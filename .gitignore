@@ -1,0 +1,15 @@
+# Runtime data (SQLite db + per-run output files, created by the volume mount)
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Build / editor noise
+*.log
+.DS_Store
+.idea/
+.vscode/

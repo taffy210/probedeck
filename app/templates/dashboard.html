@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProbeDeck · status</title>
+  <script src="/static/htmx.min.js"></script>
+  <link rel="stylesheet" href="/static/app.css">
+  <meta name="theme-color" content="#0f1115">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" href="/static/icon-192.png">
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+  <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){});});}</script>
+</head>
+<body>
+<div class="frame">
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <span class="name">ProbeDeck</span>
+      <span class="sub">status board</span>
+    </div>
+    <div class="host-readout">
+      <nav class="topnav">
+        <a href="/">probe</a>
+        <a href="/dashboard" class="active">dashboard</a>
+        <a href="/status" target="_blank" rel="noopener">status&#8599;</a>
+      </nav>
+      <span id="clock"></span>
+      {% if auth_enabled %}
+      <form method="post" action="/logout" class="logout-form">
+        <button type="submit" class="logout">logout</button>
+      </form>
+      {% endif %}
+    </div>
+  </header>
+
+  <section class="panel">
+    <div class="panel-head">monitors</div>
+    <div id="tiles-wrap" hx-get="/dashboard/tiles" hx-trigger="every 15s">
+      {% include "_tiles.html" %}
+    </div>
+  </section>
+
+  <section class="panel" style="margin-top:20px">
+    <div class="panel-head sep">vantages <span class="ph-note">— remote probe agents</span></div>
+    <div id="vantages" style="padding:14px 18px 18px">
+      {% include "_vantages.html" %}
+    </div>
+  </section>
+
+  <section class="panel" style="margin-top:20px">
+    <div class="panel-head sep">maintenance windows</div>
+    <div id="maintenance" style="padding:14px 18px 18px">
+      {% with monitors = all_monitors %}{% include "_maintenance.html" %}{% endwith %}
+    </div>
+  </section>
+
+  <section class="panel" style="margin-top:20px">
+    <div class="panel-head sep">recent incidents</div>
+    {% include "_incidents.html" %}
+  </section>
+</div>
+<script>
+function tick(){
+  const c = document.getElementById('clock');
+  if (c) c.textContent = new Date().toISOString().replace('T',' ').slice(0,19) + 'Z';
+}
+tick(); setInterval(tick, 1000);
+// Maintenance add-form: show one-off vs daily time inputs. Delegated so it
+// keeps working after the fragment is swapped by htmx.
+function toggleMaintKind(kind){
+  document.querySelectorAll('.maint-once').forEach(e => e.hidden = kind !== 'once');
+  document.querySelectorAll('.maint-daily').forEach(e => e.hidden = kind !== 'daily');
+}
+</script>
+</body>
+</html>

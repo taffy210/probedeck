@@ -1,0 +1,48 @@
+{# Maintenance windows: add-form + current list. Alerts are silenced while a
+   window covering a monitor (or all monitors) is active. #}
+<form class="maint-add" hx-post="/maintenance" hx-target="#maintenance" hx-swap="innerHTML">
+  <div class="maint-row">
+    <select name="monitor_id" aria-label="scope">
+      <option value="">all monitors</option>
+      {% for m in monitors %}<option value="{{ m.id }}">{{ m.label }}</option>{% endfor %}
+    </select>
+    <select name="kind" aria-label="kind" onchange="toggleMaintKind(this.value)">
+      <option value="once">one-off</option>
+      <option value="daily">daily</option>
+    </select>
+    <input name="label" placeholder="reason (optional)">
+  </div>
+  <div class="maint-row maint-once">
+    <label class="fld inline mini"><span>from</span><input type="datetime-local" name="starts_at"></label>
+    <label class="fld inline mini"><span>to</span><input type="datetime-local" name="ends_at"></label>
+  </div>
+  <div class="maint-row maint-daily" hidden>
+    <label class="fld inline mini"><span>from</span><input type="time" name="start_tod"></label>
+    <label class="fld inline mini"><span>to</span><input type="time" name="end_tod"></label>
+    <span class="hint">UTC · repeats every day</span>
+  </div>
+  <button class="mon-btn" type="submit">+ window</button>
+</form>
+
+{% if windows %}
+<table class="maint-table">
+  <thead><tr><th>scope</th><th>when (UTC)</th><th>reason</th><th></th></tr></thead>
+  <tbody>
+  {% for w in windows %}
+  <tr>
+    <td>{{ w.monitor_label or 'all monitors' }}</td>
+    <td class="mono">
+      {% if w.kind == 'daily' %}daily {{ w.starts_at }}–{{ w.ends_at }}
+      {% else %}{{ w.starts_at[:16]|replace('T',' ') }} → {{ w.ends_at[:16]|replace('T',' ') }}{% endif %}
+    </td>
+    <td>{{ w.label }}</td>
+    <td><button type="button" class="micon del" title="Delete window"
+                hx-post="/maintenance/{{ w.id }}/delete" hx-target="#maintenance"
+                hx-swap="innerHTML" hx-confirm="Delete this maintenance window?">&times;</button></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty small" style="padding:10px 2px">No maintenance windows — alerts always fire.</p>
+{% endif %}

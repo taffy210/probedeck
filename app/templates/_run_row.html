@@ -1,0 +1,40 @@
+{# A single live run entry in the console stream. While running, a WebSocket
+   (data-ws) streams the output and signals completion; no per-row polling. #}
+<div class="run-row status-{{ run.status }}"
+     data-runid="{{ run.id }}"
+     {% if run.status == 'running' %}data-ws="/ws/output/{{ run.id }}"{% endif %}>
+  <div class="run-meta">
+    <span class="badge {{ run.status }}">{{ run.status }}</span>
+    <span class="rtool">{{ run.tool }}</span>
+    <span class="rtarget">{{ run.target }}</span>
+    <span class="rid">#{{ run.id }}</span>
+  </div>
+  <div class="run-cmd">$ {{ run.args }}</div>
+  {% if run.status != 'running' %}
+  {% if summary %}
+  <div class="summary">
+    {% for label, value in summary %}
+    <div class="stat"><span class="s-val">{{ value }}</span><span class="s-lab">{{ label }}</span></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <pre class="run-out"
+       hx-get="/output/{{ run.id }}" hx-trigger="load" hx-swap="innerHTML">…</pre>
+  <div class="run-actions">
+    <button type="button" class="copy-out" title="Copy output">copy</button>
+    <a href="/download/{{ run.id }}/txt">txt</a>
+    {% if tools[run.tool].json %}<a href="/download/{{ run.id }}/json">json</a>{% endif %}
+    {% if tools[run.tool].pcap %}<a href="/download/{{ run.id }}/pcap">pcap</a>{% endif %}
+    {% if run.exit_code is not none %}<span class="exit">exit {{ run.exit_code }}</span>{% endif %}
+  </div>
+  {% else %}
+  {# Live tail: a WebSocket appends output into this <pre> as it arrives, and
+     fires a row refresh on completion. #}
+  <pre class="run-out running">…</pre>
+  <div class="run-actions">
+    <button type="button" class="stop"
+            hx-post="/runs/{{ run.id }}/cancel"
+            hx-target="closest .run-row" hx-swap="outerHTML">stop</button>
+  </div>
+  {% endif %}
+</div>

@@ -1,0 +1,53 @@
+{# Monitor list with latest reading + sparkline. Polled on a timer. #}
+{% if monitors %}
+<div class="mon-list">
+  {% for v in monitors %}
+  {% set m = v.m %}
+  <div class="mon {% if not m.enabled %}off{% endif %}">
+    <div class="mon-top">
+      <span class="mon-stat s-{{ v.status }}" title="{{ v.status }}"></span>
+      <a class="mon-label" href="/monitors/{{ m.id }}">{{ m.label }}</a>
+      {% if v.uptime is not none %}<span class="mon-up">{{ '%g'|format(v.uptime) }}%</span>{% endif %}
+      <span class="mon-int">{{ '%ds'|format(m.interval_sec) if m.interval_sec < 60 else '%dm'|format(m.interval_sec // 60) }}</span>
+      <div class="mon-ctl">
+        <button type="button" class="micon" title="Run now"
+                hx-post="/monitors/{{ m.id }}/run" hx-target="#monitors" hx-swap="innerHTML">&#9655;</button>
+        <button type="button" class="micon" title="{{ 'Pause' if m.enabled else 'Resume' }}"
+                hx-post="/monitors/{{ m.id }}/toggle" hx-target="#monitors" hx-swap="innerHTML">{{ '&#10073;&#10073;'|safe if m.enabled else '&#9654;'|safe }}</button>
+        <button type="button" class="micon del" title="Delete monitor"
+                hx-post="/monitors/{{ m.id }}/delete" hx-target="#monitors" hx-swap="innerHTML"
+                hx-confirm="Delete this monitor and its history?">&times;</button>
+      </div>
+    </div>
+    <div class="mon-body">
+      <div class="mon-read">
+        {% if v.latest and v.latest.value is not none %}
+        <span class="mon-val {% if not v.latest.ok %}bad{% endif %}">{{ '%g'|format(v.latest.value) }}<span class="mon-unit">{{ v.unit }}</span></span>
+        {% if v.latest.loss is not none %}<span class="mon-loss {% if v.latest.loss > 0 %}warn{% endif %}">{{ '%g'|format(v.latest.loss) }}% loss</span>{% endif %}
+        {% elif v.latest and not v.latest.ok %}
+        <span class="mon-val bad">down</span>
+        {% elif m.last_fp %}
+        {# value-less drift/dig monitor: show the tracked fingerprint #}
+        <span class="mon-val tracking">{% if m.watch_drift %}&#128065; watching{% else %}&#10003; ok{% endif %}</span>
+        <span class="mon-fp mono">{{ m.last_fp }}</span>
+        {% elif v.latest %}
+        <span class="mon-val tracking">&#10003; ok</span>
+        {% else %}
+        <span class="mon-val pending">waiting…</span>
+        {% endif %}
+      </div>
+      {% if v.spark %}
+      <svg class="spark" viewBox="0 0 {{ v.spark.w }} {{ v.spark.h }}" preserveAspectRatio="none">
+        <polyline points="{{ v.spark.points }}" fill="none"
+                  stroke="{{ 'var(--red)' if v.latest and not v.latest.ok else 'var(--accent-hi)' }}"
+                  stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+      </svg>
+      <div class="spark-ax"><span>{{ '%g'|format(v.spark.hi) }}</span><span>{{ '%g'|format(v.spark.lo) }}</span></div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="empty small">No monitors yet. Configure a probe and hit “monitor”.</p>
+{% endif %}

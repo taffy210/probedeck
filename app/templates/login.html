@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProbeDeck · sign in</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="login-body">
+  <form class="login-card" method="post" action="/login" autocomplete="off">
+    <div class="brand">
+      <span class="dot"></span>
+      <span class="name">ProbeDeck</span>
+    </div>
+    <p class="login-sub">link &amp; path diagnostics</p>
+    {% if bad %}<p class="login-err">Invalid username or password.</p>{% endif %}
+    <label class="fld"><span>user</span>
+      <input name="username" autocomplete="username" autofocus required></label>
+    <label class="fld"><span>pass</span>
+      <input name="password" type="password" autocomplete="current-password" required></label>
+    <button class="run" type="submit">sign in</button>
+  </form>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProbeDeck · {{ m.label }}</title>
+  <script src="/static/htmx.min.js"></script>
+  <link rel="stylesheet" href="/static/app.css">
+  <meta name="theme-color" content="#0f1115">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" href="/static/icon-192.png">
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+  <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){});});}</script>
+</head>
+<body>
+<div class="frame">
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <span class="name">ProbeDeck</span>
+      <span class="sub">monitor detail</span>
+    </div>
+    <div class="host-readout">
+      <nav class="topnav">
+        <a href="/">probe</a>
+        <a href="/dashboard">dashboard</a>
+      </nav>
+      <span id="clock"></span>
+    </div>
+  </header>
+
+  <div class="detail-head">
+    <div>
+      <span class="d-status s-{{ status }}"></span>
+      <span class="d-label">{{ m.label }}</span>
+      <span class="d-meta mono">{{ m.tool }} · {{ m.target }}
+        · every {{ '%ds'|format(m.interval_sec) if m.interval_sec < 60 else '%dm'|format(m.interval_sec // 60) }}
+        {% if not m.enabled %}· <span class="warn">paused</span>{% endif %}</span>
+    </div>
+    <div class="d-stats">
+      {% if uptime is not none %}<div class="stat"><span class="s-val">{{ '%g'|format(uptime) }}%</span><span class="s-lab">uptime</span></div>{% endif %}
+      {% if chart and chart.p50 is not none %}<div class="stat"><span class="s-val">{{ '%.0f'|format(chart.p50) }}<span class="s-unit">{{ unit }}</span></span><span class="s-lab">p50</span></div>{% endif %}
+      {% if chart and chart.p95 is not none %}<div class="stat"><span class="s-val">{{ '%.0f'|format(chart.p95) }}<span class="s-unit">{{ unit }}</span></span><span class="s-lab">p95</span></div>{% endif %}
+      {% if latest and latest.value is not none %}<div class="stat"><span class="s-val">{{ '%g'|format(latest.value) }}<span class="s-unit">{{ unit }}</span></span><span class="s-lab">latest</span></div>{% endif %}
+    </div>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head">latency over time {% if unit %}({{ unit }}){% endif %} · loss overlay</div>
+    <div class="chart-wrap">
+    {% if chart %}
+      <svg class="ts-chart" viewBox="0 0 {{ chart.w }} {{ chart.h }}" preserveAspectRatio="none">
+        {# loss / down bars behind the line #}
+        {% for b in chart.bars %}
+        <rect x="{{ '%.1f'|format(b.x) }}" y="{{ '%.1f'|format(b.y) }}" width="3"
+              height="{{ '%.1f'|format(b.h) }}" class="{{ 'bar-down' if b.down else 'bar-loss' }}"/>
+        {% endfor %}
+        {% if chart.p95 is not none %}
+        {% set y95 = chart.pad + (chart.h - 2*chart.pad) * (1 - (chart.p95 - chart.lo) / ((chart.hi - chart.lo) or 1)) %}
+        <line x1="{{ chart.pad }}" x2="{{ chart.w - chart.pad }}" y1="{{ '%.1f'|format(y95) }}" y2="{{ '%.1f'|format(y95) }}" class="ts-p95"/>
+        {% endif %}
+        <polyline points="{{ chart.line }}" fill="none" class="ts-line" vector-effect="non-scaling-stroke"/>
+        <text x="2" y="{{ chart.pad }}" class="ts-ax">{{ '%g'|format(chart.hi) }}</text>
+        <text x="2" y="{{ chart.h - chart.pad + 4 }}" class="ts-ax">{{ '%g'|format(chart.lo) }}</text>
+      </svg>
+      <div class="chart-legend">
+        <span><i class="lg-line"></i> latency</span>
+        <span><i class="lg-p95"></i> p95</span>
+        <span><i class="lg-loss"></i> loss</span>
+        <span><i class="lg-down"></i> down</span>
+        <span class="chart-n">{{ samples|length }} samples</span>
+      </div>
+    {% else %}
+      <p class="empty">No samples yet. This monitor hasn't run, or hasn't returned a measurable value.</p>
+    {% endif %}
+    </div>
+  </section>
+
+  <div class="detail-cols">
+    <section class="panel">
+      <div class="panel-head sep">alert rules</div>
+      <form class="alert-form" method="post" action="/monitors/{{ m.id }}/alerts">
+        <input type="hidden" name="notify_present" value="1">
+        <label class="fld inline"><span>warn above</span>
+          <input name="warn_latency" type="number" step="any" placeholder="ms / units"
+                 value="{{ m.warn_latency if m.warn_latency is not none else '' }}">
+        </label>
+        <label class="fld inline"><span>warn below</span>
+          <input name="warn_floor" type="number" step="any" placeholder="cert days, Mbit/s…"
+                 value="{{ m.warn_floor if m.warn_floor is not none else '' }}">
+        </label>
+        <label class="fld inline"><span>loss &gt;</span>
+          <input name="warn_loss" type="number" step="any" placeholder="%"
+                 value="{{ m.warn_loss if m.warn_loss is not none else '' }}">
+        </label>
+        <label class="fld inline"><span>down after</span>
+          <input name="down_after" type="number" min="1" max="20"
+                 value="{{ m.down_after or 2 }}">
+        </label>
+        <label class="fld"><span>webhook (slack / discord / ntfy)</span>
+          <input name="webhook_url" placeholder="https://…"
+                 value="{{ m.webhook_url or '' }}">
+        </label>
+        <label class="fld check"><input type="checkbox" name="notify" {% if m.notify %}checked{% endif %}><span>browser notifications</span></label>
+        {% if m.tool in ('dig', 'tlscert') %}
+        <label class="fld check"><input type="checkbox" name="watch_drift" {% if m.watch_drift %}checked{% endif %}><span>alert on change (drift)</span></label>
+        {% if m.last_fp %}<p class="hint">current fingerprint: <code class="fp">{{ m.last_fp }}</code></p>{% endif %}
+        {% endif %}
+        <button class="run" type="submit">save rules</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head sep">incidents</div>
+      {% include "_incidents.html" %}
+    </section>
+  </div>
+</div>
+<script>
+function tick(){
+  const c = document.getElementById('clock');
+  if (c) c.textContent = new Date().toISOString().replace('T',' ').slice(0,19) + 'Z';
+}
+tick(); setInterval(tick, 1000);
+</script>
+</body>
+</html>

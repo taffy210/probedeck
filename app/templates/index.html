@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProbeDeck</title>
+  <script src="/static/htmx.min.js"></script>
+  <link rel="stylesheet" href="/static/app.css">
+  <meta name="theme-color" content="#0f1115">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" href="/static/icon-192.png">
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+  <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){});});}</script>
+</head>
+<body>
+<div class="frame">
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <span class="name">ProbeDeck</span>
+      <span class="sub">link &amp; path diagnostics</span>
+    </div>
+    <div class="host-readout">
+      <nav class="topnav">
+        <a href="/" class="active">probe</a>
+        <a href="/dashboard">dashboard<span id="inc-dot" class="inc-dot" hidden></span></a>
+      </nav>
+      <span id="clock"></span>
+      {% if auth_enabled %}
+      <form method="post" action="/logout" class="logout-form">
+        <button type="submit" class="logout">logout</button>
+      </form>
+      {% endif %}
+    </div>
+  </header>
+
+  <div class="cols">
+    <!-- LEFT: tool selector + form -->
+    <section class="panel tools">
+      <div class="panel-head">probe</div>
+      {% set blurbs = {
+        "mtr": "live path + loss",
+        "ping": "reachability, RTT",
+        "traceroute": "hop-by-hop path",
+        "dig": "DNS records",
+        "nslookup": "DNS lookup",
+        "iperf3": "throughput test",
+        "nmap": "port scan",
+        "curl": "HTTP timing breakdown",
+        "whois": "registration data",
+        "tcpdump": "packet capture",
+        "tcp": "port reachability",
+        "tlscert": "cert expiry",
+        "http": "status assertion"
+      } %}
+      <div class="toolgrid" role="tablist">
+        {% for key, spec in tools.items() %}
+        <button type="button" class="toolbtn {% if loop.first %}active{% endif %}"
+                role="tab" data-tool="{{ key }}"
+                onclick="selectTool('{{ key }}', this)">
+          <span class="t-name">{{ spec.label }}</span>
+          <span class="t-desc">{{ blurbs.get(key, "") }}</span>
+        </button>
+        {% endfor %}
+        <button type="button" class="toolbtn" role="tab" data-tool="dnsprop"
+                onclick="selectTool('dnsprop', this)">
+          <span class="t-name">DNS propagation</span>
+          <span class="t-desc">resolver agreement</span>
+        </button>
+        <button type="button" class="toolbtn" role="tab" data-tool="path"
+                onclick="selectTool('path', this)">
+          <span class="t-name">Path insight</span>
+          <span class="t-desc">ASN + geo per hop</span>
+        </button>
+        <button type="button" class="toolbtn" role="tab" data-tool="vantage"
+                onclick="selectTool('vantage', this)">
+          <span class="t-name">Vantage check</span>
+          <span class="t-desc">reachability worldwide</span>
+        </button>
+      </div>
+
+      <form id="probe-form" hx-post="/run" hx-target="#run-stream"
+            hx-swap="afterbegin" onsubmit="return prep(this)">
+        <input type="hidden" name="tool" id="tool-field" value="{{ tools.keys()|list|first }}">
+
+        <label class="fld">
+          <span>target</span>
+          <input name="target" id="target" list="profile-list"
+                 placeholder="host / ip / cidr" autocomplete="off" required>
+        </label>
+        <datalist id="profile-list">
+          {% for p in profiles %}
+          <option value="{{ p.value }}">{{ p.name }} ({{ p.kind }})</option>
+          {% endfor %}
+        </datalist>
+        <div class="chips recent" id="recent" hidden>
+          <span class="chips-label">recent</span>
+        </div>
+
+        <!-- per-tool option slots, shown/hidden by selectTool -->
+        <div class="opts" data-for="mtr">
+          <div class="chips"><span class="chips-label">quick</span>
+            <button type="button" class="chip" data-val="1.1.1.1">1.1.1.1</button>
+            <button type="button" class="chip" data-val="8.8.8.8">8.8.8.8</button>
+            <button type="button" class="chip" data-val="9.9.9.9">9.9.9.9</button>
+          </div>
+          <label class="fld inline"><span>cycles</span>
+            <input name="cycles" type="number" value="10" min="1" max="60"></label>
+        </div>
+        <div class="opts" data-for="ping">
+          <div class="chips"><span class="chips-label">quick</span>
+            <button type="button" class="chip" data-val="1.1.1.1">1.1.1.1</button>
+            <button type="button" class="chip" data-val="8.8.8.8">8.8.8.8</button>
+            <button type="button" class="chip" data-val="9.9.9.9">9.9.9.9</button>
+          </div>
+          <label class="fld inline"><span>count</span>
+            <input name="count" type="number" value="5" min="1" max="100"></label>
+        </div>
+        <div class="opts" data-for="traceroute">
+          <div class="chips"><span class="chips-label">quick</span>
+            <button type="button" class="chip" data-val="1.1.1.1">1.1.1.1</button>
+            <button type="button" class="chip" data-val="8.8.8.8">8.8.8.8</button>
+            <button type="button" class="chip" data-val="9.9.9.9">9.9.9.9</button>
+          </div>
+        </div>
+        <div class="opts" data-for="dig">
+          <label class="fld inline"><span>type</span>
+            <select name="rtype">
+              <option>A</option><option>AAAA</option><option>MX</option>
+              <option>TXT</option><option>NS</option><option>CNAME</option>
+              <option>SOA</option><option>PTR</option><option>ANY</option>
+            </select></label>
+          <label class="fld inline"><span>resolver</span>
+            <input name="resolver" placeholder="optional"></label>
+          <div class="chips"><span class="chips-label">resolver</span>
+            <button type="button" class="chip" data-fill="resolver" data-val="1.1.1.1">1.1.1.1</button>
+            <button type="button" class="chip" data-fill="resolver" data-val="8.8.8.8">8.8.8.8</button>
+            <button type="button" class="chip" data-fill="resolver" data-val="9.9.9.9">9.9.9.9</button>
+          </div>
+        </div>
+        <div class="opts" data-for="nslookup">
+          <label class="fld inline"><span>resolver</span>
+            <input name="resolver" placeholder="optional"></label>
+          <div class="chips"><span class="chips-label">resolver</span>
+            <button type="button" class="chip" data-fill="resolver" data-val="1.1.1.1">1.1.1.1</button>
+            <button type="button" class="chip" data-fill="resolver" data-val="8.8.8.8">8.8.8.8</button>
+            <button type="button" class="chip" data-fill="resolver" data-val="9.9.9.9">9.9.9.9</button>
+          </div>
+        </div>
+        <div class="opts" data-for="iperf3">
+          <label class="fld"><span>public server</span>
+            <select id="iperf-server" onchange="pickIperfServer(this)">
+              <option value="" data-port="">— pick a public server, or type your own —</option>
+              <option value="ping.online.net" data-port="5200">Scaleway/Online · FR Paris (5200)</option>
+              <option value="fra.speedtest.clouvider.net" data-port="5200">Clouvider · DE Frankfurt (5200)</option>
+              <option value="speedtest.wtnet.de" data-port="5200">wilhelm.tel · DE Hamburg (5200)</option>
+              <option value="speedtest.serverius.net" data-port="5002">Serverius · NL Dronten (5002)</option>
+              <option value="lon.speedtest.clouvider.net" data-port="5200">Clouvider · UK London (5200)</option>
+              <option value="nyc.speedtest.clouvider.net" data-port="5200">Clouvider · US New York (5200)</option>
+              <option value="la.speedtest.clouvider.net" data-port="5200">Clouvider · US Los Angeles (5200)</option>
+            </select></label>
+          <label class="fld inline"><span>secs</span>
+            <input name="duration" type="number" value="10" min="1" max="60"></label>
+          <label class="fld inline"><span>port</span>
+            <input name="port" placeholder="5201"></label>
+          <label class="fld check"><input type="checkbox" name="reverse"><span>reverse (-R)</span></label>
+          <p class="hint">public servers are third-party — availability and ports change. be courteous: short tests only.</p>
+        </div>
+        <div class="opts" data-for="nmap">
+          <div class="chips"><span class="chips-label">quick</span>
+            <button type="button" class="chip" data-val="scanme.nmap.org">scanme.nmap.org</button>
+          </div>
+          <label class="fld inline"><span>extra args</span>
+            <input name="extra" placeholder="-sV -p 22,443"></label>
+          <p class="hint">default: top-100 ports, polite timing. scanme.nmap.org is nmap's sanctioned test host.</p>
+        </div>
+        <div class="opts" data-for="curl">
+          <div class="chips"><span class="chips-label">quick</span>
+            <button type="button" class="chip" data-val="cloudflare.com">cloudflare.com</button>
+            <button type="button" class="chip" data-val="google.com">google.com</button>
+            <button type="button" class="chip" data-val="example.com">example.com</button>
+          </div>
+        </div>
+        <div class="opts" data-for="tcpdump">
+          <label class="fld inline"><span>packets</span>
+            <input name="count" type="number" value="500" min="1" max="100000"></label>
+          <label class="fld inline"><span>iface</span>
+            <input name="iface" placeholder="any"></label>
+          <p class="hint">capped at packet count; writes downloadable pcap</p>
+        </div>
+        <div class="opts" data-for="tcp">
+          <div class="chips"><span class="chips-label">quick</span>
+            <button type="button" class="chip" data-val="1.1.1.1">1.1.1.1</button>
+            <button type="button" class="chip" data-val="github.com">github.com</button>
+          </div>
+          <label class="fld inline"><span>port</span>
+            <input name="port" type="number" min="1" max="65535" value="443" required></label>
+          <p class="hint">opens a TCP connection and times the handshake. monitorable.</p>
+        </div>
+        <div class="opts" data-for="tlscert">
+          <div class="chips"><span class="chips-label">quick</span>
+            <button type="button" class="chip" data-val="cloudflare.com">cloudflare.com</button>
+            <button type="button" class="chip" data-val="github.com">github.com</button>
+            <button type="button" class="chip" data-val="example.com">example.com</button>
+          </div>
+          <label class="fld inline"><span>port</span>
+            <input name="port" type="number" min="1" max="65535" value="443"></label>
+          <label class="fld inline"><span>servername</span>
+            <input name="servername" placeholder="SNI (defaults to target)"></label>
+          <p class="hint">reads the presented certificate and reports days until expiry. monitor it with a "warn below" rule (e.g. 14 days).</p>
+        </div>
+        <div class="opts" data-for="http">
+          <div class="chips"><span class="chips-label">quick</span>
+            <button type="button" class="chip" data-val="https://example.com">example.com</button>
+            <button type="button" class="chip" data-val="https://github.com">github.com</button>
+          </div>
+          <label class="fld inline"><span>method</span>
+            <select name="method"><option>GET</option><option>HEAD</option></select></label>
+          <label class="fld inline"><span>expect</span>
+            <input name="expect" placeholder="200 (blank = 2xx/3xx)"></label>
+          <p class="hint">asserts the response status. monitor alerts when it stops matching.</p>
+        </div>
+        <div class="opts" data-for="dnsprop">
+          <div class="chips"><span class="chips-label">quick</span>
+            <button type="button" class="chip" data-val="cloudflare.com">cloudflare.com</button>
+            <button type="button" class="chip" data-val="github.com">github.com</button>
+            <button type="button" class="chip" data-val="example.com">example.com</button>
+          </div>
+          <label class="fld inline"><span>type</span>
+            <select name="rtype">
+              <option>A</option><option>AAAA</option><option>MX</option>
+              <option>TXT</option><option>NS</option><option>CNAME</option>
+              <option>SOA</option>
+            </select></label>
+          <p class="hint">queries a dozen public resolvers + the domain's authoritative NS, then flags disagreement.</p>
+        </div>
+        <div class="opts" data-for="path">
+          <div class="chips"><span class="chips-label">quick</span>
+            <button type="button" class="chip" data-val="1.1.1.1">1.1.1.1</button>
+            <button type="button" class="chip" data-val="github.com">github.com</button>
+          </div>
+          <p class="hint">traceroute annotated with ASN / network owner / country per hop. can take ~30–60s.</p>
+        </div>
+        <div class="opts" data-for="vantage">
+          <div class="chips"><span class="chips-label">quick</span>
+            <button type="button" class="chip" data-val="github.com">github.com</button>
+            <button type="button" class="chip" data-val="1.1.1.1">1.1.1.1</button>
+          </div>
+          <label class="fld inline"><span>probe</span>
+            <select name="vtool" onchange="vantageProbe(this.value)">
+              <option value="tcp">TCP port</option>
+              <option value="ping">Ping (latency/loss)</option>
+              <option value="http">HTTP status</option>
+              <option value="tlscert">TLS cert</option>
+              <option value="dns">DNS resolution</option>
+            </select></label>
+          <label class="fld inline v-port"><span>port</span>
+            <input name="port" type="number" min="1" max="65535" value="443"></label>
+          <label class="fld inline v-expect" hidden><span>expect</span>
+            <input name="expect" placeholder="200 (blank = 2xx/3xx)"></label>
+          <label class="fld inline v-count" hidden><span>count</span>
+            <input name="count" type="number" min="1" max="20" value="4"></label>
+          <p class="hint">runs from this server <em>and</em> every registered vantage at once — compares reachability, latency &amp; DNS by location. add vantages on the dashboard.</p>
+        </div>
+
+        <button class="run" type="submit">run probe</button>
+      </form>
+
+      <div class="mon-add" id="monitor-add" hidden>
+        <div class="mon-add-row">
+          <span class="chips-label">monitor</span>
+          <select id="mon-interval" name="interval" aria-label="monitor interval">
+            <option value="60">every 1m</option>
+            <option value="300" selected>every 5m</option>
+            <option value="900">every 15m</option>
+            <option value="1800">every 30m</option>
+            <option value="3600">every 1h</option>
+          </select>
+          <button type="button" class="mon-btn"
+                  hx-post="/monitors" hx-include="#probe-form, #monitor-add"
+                  hx-target="#monitors" hx-swap="innerHTML"
+                  onclick="askNotifyPerm()">+ monitor</button>
+        </div>
+        <div class="mon-alerts" id="mon-alerts">
+          <input type="hidden" name="notify_present" value="1">
+          <label class="fld inline mini"><span>warn above</span>
+            <input name="warn_latency" type="number" step="any" placeholder="ms / units"></label>
+          <label class="fld inline mini"><span>warn below</span>
+            <input name="warn_floor" type="number" step="any" placeholder="e.g. cert days, Mbit/s"></label>
+          <label class="fld inline mini"><span>loss&gt;</span>
+            <input name="warn_loss" type="number" step="any" placeholder="%"></label>
+          <label class="fld inline mini"><span>down after</span>
+            <input name="down_after" type="number" min="1" max="20" value="2"></label>
+          <label class="fld inline mini"><span>webhook</span>
+            <input name="webhook_url" placeholder="slack / discord / ntfy URL"></label>
+          <label class="fld check mini"><input type="checkbox" name="notify" checked><span>browser alerts</span></label>
+          <label class="fld check mini" id="drift-opt" hidden><input type="checkbox" name="watch_drift"><span>alert on change (drift)</span></label>
+        </div>
+      </div>
+
+      <div class="panel-head sep">monitors</div>
+      <div id="monitors" hx-get="/monitors" hx-trigger="load, every 15s">
+        loading…
+      </div>
+
+      <div class="panel-head sep">target profiles</div>
+      <div id="profiles">
+        {% include "_profiles.html" %}
+      </div>
+      <form class="profile-add" hx-post="/profiles" hx-target="#profiles" hx-swap="innerHTML">
+        <input name="name" placeholder="name" required>
+        <select name="kind">
+          {% for k in profile_kinds %}<option>{{ k }}</option>{% endfor %}
+        </select>
+        <input name="value" placeholder="host / ip" required>
+        <button type="submit">+</button>
+      </form>
+    </section>
+
+    <!-- RIGHT: live stream + history -->
+    <section class="panel results">
+      <div class="panel-head">console</div>
+      <div id="run-stream" class="stream"></div>
+
+      <div class="panel-head sep with-search">
+        <span>history</span>
+        <div class="head-actions">
+          <input id="hsearch" placeholder="search target / args"
+                 hx-get="/history" hx-target="#history" hx-trigger="keyup changed delay:300ms"
+                 hx-include="this" name="q">
+          <button type="button" class="clear-btn"
+                  hx-post="/history/clear" hx-target="#history" hx-swap="innerHTML"
+                  hx-confirm="Clear all history? This deletes every saved run and its output files.">clear</button>
+        </div>
+      </div>
+      <div id="history" hx-get="/history" hx-trigger="load, every 10s">
+        loading…
+      </div>
+    </section>
+  </div>
+</div>
+
+<div id="cmp-hint" hidden>pick a second run to compare · <kbd>Esc</kbd> to cancel</div>
+
+<script>
+// Did the current target value come from the keyboard? Programmatic setters
+// (chips, profiles, iperf picker) clear this; the input event below sets it.
+let targetTyped = false;
+const RECENT_KEY = 'probedeck.recent';
+
+function getRecent(){
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; }
+  catch (e) { return []; }
+}
+function recordRecent(val){
+  val = (val || '').trim();
+  if (!val) return;
+  let list = getRecent().filter(v => v !== val);
+  list.unshift(val);
+  list = list.slice(0, 5);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+  renderRecent();
+}
+function renderRecent(){
+  const box = document.getElementById('recent');
+  if (!box) return;
+  box.querySelectorAll('.chip').forEach(c => c.remove());
+  const list = getRecent();
+  box.hidden = list.length === 0;
+  for (const v of list){
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.dataset.val = v; b.textContent = v;
+    box.appendChild(b);
+  }
+}
+
+// Tools worth trending over time; the "+ monitor" control only shows for these.
+const MONITORABLE = new Set(['ping', 'mtr', 'iperf3', 'curl', 'tcp', 'tlscert', 'http', 'dig']);
+// Tools that support change-detection (drift) — the checkbox only shows here.
+const DRIFTABLE = new Set(['dig', 'tlscert']);
+function toggleMonitorAdd(tool){
+  const el = document.getElementById('monitor-add');
+  if (el) el.hidden = !MONITORABLE.has(tool);
+  const drift = document.getElementById('drift-opt');
+  if (drift) drift.hidden = !DRIFTABLE.has(tool);
+}
+
+// Vantage check: each probe type shows the field it actually uses.
+function vantageProbe(kind){
+  const q = s => document.querySelector('.opts[data-for="vantage"] ' + s);
+  const port = q('.v-port'), expect = q('.v-expect'), count = q('.v-count');
+  if (port) port.hidden = !(kind === 'tcp' || kind === 'tlscert');
+  if (expect) expect.hidden = kind !== 'http';
+  if (count) count.hidden = kind !== 'ping';
+}
+
+function selectTool(tool, btn) {
+  document.getElementById('tool-field').value = tool;
+  document.querySelectorAll('.toolbtn').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.opts').forEach(o => {
+    o.style.display = (o.dataset.for === tool) ? 'flex' : 'none';
+  });
+  toggleMonitorAdd(tool);
+}
+
+// Saved profiles → which tool makes sense for each kind.
+const KIND_TOOL = {gateway:'mtr', iperf:'iperf3', resolver:'dig', host:'ping', other:'ping'};
+function applyProfile(value, kind, run){
+  const tool = KIND_TOOL[kind] || 'ping';
+  const target = document.getElementById('target');
+  target.value = value; targetTyped = false;
+  const btn = document.querySelector('.toolbtn[data-tool="'+tool+'"]');
+  if (btn) selectTool(tool, btn);
+  if (run){
+    document.getElementById('probe-form').requestSubmit();
+  } else {
+    target.focus();
+  }
+}
+// Public iperf3 server picker: fill target + its port, then reset the select.
+function pickIperfServer(sel){
+  const opt = sel.options[sel.selectedIndex];
+  if(!sel.value) return;
+  document.getElementById('target').value = sel.value; targetTyped = false;
+  const port = document.querySelector('#probe-form input[name="port"]');
+  if(port) port.value = opt.dataset.port || '';
+  document.getElementById('target').focus();
+}
+// Delegated so it keeps working after htmx swaps the profile list.
+// Compare: collect two run ids, then load them side by side in the console.
+let cmpSel = [];
+function markCmp(){
+  document.querySelectorAll('.ricon.cmp').forEach(b => {
+    b.classList.toggle('picked', cmpSel.includes(b.dataset.id));
+  });
+  const hint = document.getElementById('cmp-hint');
+  if (hint) hint.hidden = cmpSel.length === 0;
+}
+function clearCmp(){ cmpSel = []; markCmp(); }
+
+document.body.addEventListener('click', (e) => {
+  const cmp = e.target.closest('.ricon.cmp');
+  if (cmp){
+    const id = cmp.dataset.id;
+    if (cmpSel.includes(id)){ cmpSel = cmpSel.filter(x => x !== id); }
+    else { cmpSel.push(id); }
+    if (cmpSel.length === 2){
+      htmx.ajax('GET', '/compare?a=' + cmpSel[0] + '&b=' + cmpSel[1],
+                {target: '#run-stream', swap: 'afterbegin'});
+      clearCmp();
+    } else { markCmp(); }
+    return;
+  }
+  const copy = e.target.closest('.copy-out');
+  if (copy){
+    const row = copy.closest('.run-row');
+    const pre = row && row.querySelector('.run-out');
+    if (pre){
+      navigator.clipboard.writeText(pre.textContent).then(() => {
+        const was = copy.textContent;
+        copy.textContent = 'copied'; copy.classList.add('ok');
+        setTimeout(() => { copy.textContent = was; copy.classList.remove('ok'); }, 1200);
+      });
+    }
+    return;
+  }
+  const chip = e.target.closest('.chip');
+  if (chip){
+    const field = chip.dataset.fill || 'target';
+    if (field === 'target'){
+      const t = document.getElementById('target');
+      t.value = chip.dataset.val; targetTyped = false; t.focus();
+    } else {
+      // fill a field within the currently visible tool options (e.g. resolver)
+      const opts = chip.closest('.opts');
+      const inp = opts && opts.querySelector('[name="'+field+'"]');
+      if (inp){ inp.value = chip.dataset.val; inp.focus(); }
+    }
+    return;
+  }
+  const load = e.target.closest('.prow');
+  if (load){ applyProfile(load.dataset.pval, load.dataset.pkind, false); return; }
+  const run = e.target.closest('.prun');
+  if (run){ applyProfile(run.dataset.pval, run.dataset.pkind, true); }
+});
+// init: show only first tool's opts
+document.addEventListener('DOMContentLoaded', () => {
+  const first = document.getElementById('tool-field').value;
+  document.querySelectorAll('.opts').forEach(o => {
+    o.style.display = (o.dataset.for === first) ? 'flex' : 'none';
+  });
+  toggleMonitorAdd(first);
+  const t = document.getElementById('target');
+  if (t) t.addEventListener('input', () => { targetTyped = true; });
+  renderRecent();
+  tick(); setInterval(tick, 1000);
+});
+// Keep the live output pane pinned to the newest line as it tails.
+document.body.addEventListener('htmx:afterSwap', (e) => {
+  const t = e.target;
+  if (t && t.classList && t.classList.contains('run-out')) {
+    t.scrollTop = t.scrollHeight;
+  }
+  // The history list refreshes on a timer; restore compare selection marks.
+  if (t && t.id === 'history') markCmp();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && cmpSel.length) clearCmp();
+});
+function prep(form){
+  // Only remember addresses the user actually typed, not chip/profile picks.
+  if (targetTyped){
+    const t = document.getElementById('target');
+    if (t) recordRecent(t.value);
+  }
+  return true;
+}
+function tick(){
+  const c = document.getElementById('clock');
+  if (c) c.textContent = new Date().toISOString().replace('T',' ').slice(0,19) + 'Z';
+}
+
+// --- live output over WebSocket (replaces the old 2s row polling) ----------
+function connectStreams(){
+  document.querySelectorAll('.run-row[data-ws]:not([data-ws-on])').forEach(row => {
+    row.dataset.wsOn = '1';
+    const id = row.dataset.runid;
+    const pre = row.querySelector('.run-out');
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    let ws;
+    try { ws = new WebSocket(proto + '//' + location.host + row.dataset.ws); }
+    catch (e) { return; }
+    if (pre) pre.textContent = '';
+    let done = false;
+    const finish = () => {
+      if (done) return; done = true;
+      if (window.htmx) htmx.ajax('GET', '/status/' + id, {target: row, swap: 'outerHTML'});
+    };
+    ws.onmessage = (ev) => {
+      let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      if (msg.type === 'chunk' && pre){
+        pre.textContent += msg.data;
+        pre.scrollTop = pre.scrollHeight;
+      } else if (msg.type === 'done'){
+        finish();  // pull the finished row (summary, downloads) in one swap
+      }
+    };
+    ws.onclose = () => { if (row.isConnected) finish(); };
+  });
+}
+
+// --- browser notifications for monitor incidents ---------------------------
+let incidentState = null;  // null until first poll establishes a baseline
+function askNotifyPerm(){
+  if ('Notification' in window && Notification.permission === 'default')
+    Notification.requestPermission();
+}
+function fireNote(title, body){
+  if ('Notification' in window && Notification.permission === 'granted')
+    try { new Notification(title, {body: body}); } catch (e) {}
+}
+async function pollIncidents(){
+  let data;
+  try { data = await (await fetch('/incidents')).json(); }
+  catch (e) { return; }
+  const next = {};
+  for (const i of data.incidents) next[i.id] = i.resolved_at;
+  if (incidentState !== null){
+    for (const i of data.incidents){
+      const prev = incidentState[i.id];
+      if (prev === undefined && i.reason === 'drift')
+        fireNote('🟠 ' + i.label + ' changed', i.detail || 'fingerprint drift');
+      else if (prev === undefined && !i.resolved_at)
+        fireNote('🔴 ' + i.label + ' is down', (i.reason || 'down') +
+                 (i.peak != null ? ' · ' + i.peak : ''));
+      else if (prev === null && i.resolved_at)
+        fireNote('🟢 ' + i.label + ' recovered', 'incident resolved');
+    }
+  }
+  incidentState = next;
+  const dot = document.getElementById('inc-dot');
+  if (dot) dot.hidden = data.open === 0;
+}
+document.addEventListener('DOMContentLoaded', () => {
+  connectStreams();
+  pollIncidents(); setInterval(pollIncidents, 20000);
+});
+document.body.addEventListener('htmx:afterSwap', () => connectStreams());
+</script>
+</body>
+</html>

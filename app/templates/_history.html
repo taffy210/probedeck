@@ -1,0 +1,32 @@
+{# Searchable run history table. #}
+{% if runs %}
+<table class="htable">
+  <thead><tr><th>when</th><th>tool</th><th>target</th><th>status</th><th>files</th><th></th></tr></thead>
+  <tbody>
+  {% for r in runs %}
+    <tr class="status-{{ r.status }}">
+      <td class="mono">{{ r.started_at[:19].replace('T',' ') }}</td>
+      <td>{{ r.tool }}</td>
+      <td class="mono">{{ r.target }}</td>
+      <td><span class="badge {{ r.status }}">{{ r.status }}</span></td>
+      <td class="files">
+        <a href="/download/{{ r.id }}/txt">txt</a>
+        {% if tools[r.tool].json %}<a href="/download/{{ r.id }}/json">json</a>{% endif %}
+        {% if tools[r.tool].pcap %}<a href="/download/{{ r.id }}/pcap">pcap</a>{% endif %}
+      </td>
+      <td class="row-actions">
+        <button type="button" class="ricon cmp" title="Add to compare"
+                data-id="{{ r.id }}">&#8646;</button>
+        <button type="button" class="ricon rerun" title="Re-run"
+                hx-post="/rerun/{{ r.id }}" hx-target="#run-stream" hx-swap="afterbegin">&#8635;</button>
+        <button type="button" class="ricon del" title="Delete this run"
+                hx-post="/runs/{{ r.id }}/delete" hx-target="#history" hx-swap="innerHTML"
+                hx-confirm="Delete this run and its files?">&times;</button>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">No runs yet. Fire a probe and it shows up here.</p>
+{% endif %}
