@@ -17,6 +17,7 @@ FastAPI · htmx · SQLite · one Docker image · no build step · no external se
 ## Contents
 
 - [What it does](#what-it-does)
+- [Screenshots](#screenshots)
 - [Requirements](#requirements)
 - [Quick start](#quick-start)
 - [Configuration](#configuration)
@@ -70,6 +71,29 @@ FastAPI · htmx · SQLite · one Docker image · no build step · no external se
 - **Maintenance windows** to silence alerts during planned work.
 - **Multi-vantage probing** with lightweight remote agents.
 - Installable **PWA**.
+
+---
+
+## Screenshots
+
+**Probe console + live monitors** — pick a tool, run it, and watch recurring
+monitors trend in the sidebar.
+
+![ProbeDeck probe page with the tool grid, monitor-add form, live monitor sparklines, and run history](docs/screenshots/probe.png)
+
+**Dashboard** — status tiles with uptime %, remote vantage agents, maintenance
+windows, and the incident log.
+
+![ProbeDeck dashboard showing monitor tiles, vantages, a maintenance window, and recent incidents](docs/screenshots/dashboard.png)
+
+**Monitor detail** — a p50/p95 latency time-series with loss and outage overlay,
+editable alert rules, and the monitor's incidents.
+
+![Monitor detail view with a latency chart showing a spike and outage, alert rules, and incident log](docs/screenshots/monitor-detail.png)
+
+**Public status page** — a read-only board (labels + uptime only) you can share.
+
+![Public status page with an overall banner, per-service uptime history bars, and recent incidents](docs/screenshots/status.png)
 
 ---
 
