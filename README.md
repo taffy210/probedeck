@@ -10,6 +10,8 @@ from multiple geographic vantage points.
 
 FastAPI · htmx · SQLite · one Docker image · no build step · no external services
 
+📖 **[Full guide & tutorial →](https://zero-entry.co.za/posts/probedeck-guide/)**
+
 </div>
 
 ---
