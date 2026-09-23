@@ -94,10 +94,38 @@ def _iperf3(target, opts):
     return argv
 
 
+# nmap flags an operator may add via the "extra" field. Everything that writes
+# files (-oN/-oX/-oG/-oA/--stylesheet), reads host/target lists (-iL/-iR), runs
+# NSE scripts (--script, -sC, -A) or repoints nmap's data dirs is refused: on a
+# no-auth LAN deployment those would turn "run a port scan" into arbitrary file
+# read/write and script execution as the container user. A bare value (port
+# spec, number) has no leading '-' and rides along as an allowed flag's arg.
+_NMAP_ALLOWED_FLAGS = {
+    "-sS", "-sT", "-sU", "-sn", "-sV", "-sW", "-sY",
+    "-Pn", "-PS", "-PA", "-PU", "-PE",
+    "-p", "-F", "-r", "--top-ports", "--open", "--reason",
+    "-n", "-R", "-6", "-v", "-vv", "-d",
+    "-O", "--osscan-guess", "--version-light", "--version-intensity",
+    "--max-retries", "--host-timeout", "--min-rate", "--max-rate",
+}
+
+
+def _check_nmap_flags(tokens):
+    for t in tokens:
+        if not t.startswith("-") or t in _NMAP_ALLOWED_FLAGS:
+            continue
+        # Allow values attached to port/timing flags: -p22, -p1-1000, -T4.
+        if t[:2] == "-p" or (len(t) == 3 and t[:2] == "-T" and t[2] in "012345"):
+            continue
+        raise ValueError(f"Disallowed nmap option: {t}")
+
+
 def _nmap(target, opts):
     # Non-aggressive default: top ports, no OS detection, polite timing.
     argv = ["nmap", "-T3", "--top-ports", "100", target]
-    argv += _split_extra(opts.get("extra", ""))
+    extra = _split_extra(opts.get("extra", ""))
+    _check_nmap_flags(extra)
+    argv += extra
     return argv
 
 

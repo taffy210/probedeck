@@ -88,7 +88,9 @@ class TestMetric(unittest.TestCase):
     def test_latency_tools(self):
         self.assertEqual(monitor.metric_for("ping", PING_OUT), (True, 12.3, "ms", 0.0))
         ok, v, u, _ = monitor.metric_for("curl", CURL_OUT)
-        self.assertTrue(ok); self.assertEqual(u, "ms"); self.assertAlmostEqual(v, 200, 0)
+        self.assertTrue(ok)
+        self.assertEqual(u, "ms")
+        self.assertAlmostEqual(v, 200, 0)
 
     def test_tcp(self):
         self.assertEqual(monitor.metric_for("tcp", TCP_OUT)[0], True)
@@ -96,14 +98,17 @@ class TestMetric(unittest.TestCase):
 
     def test_tls_and_http(self):
         ok, v, u, _ = monitor.metric_for("tlscert", TLS_OUT)
-        self.assertTrue(ok); self.assertEqual(u, "days"); self.assertAlmostEqual(v, 68.4, 1)
+        self.assertTrue(ok)
+        self.assertEqual(u, "days")
+        self.assertAlmostEqual(v, 68.4, 1)
         self.assertFalse(monitor.metric_for("tlscert", TLS_FAIL)[0])
         self.assertTrue(monitor.metric_for("http", HTTP_OK)[0])
         self.assertFalse(monitor.metric_for("http", HTTP_BAD)[0])
 
     def test_dns_and_dig(self):
         ok, v, u, _ = monitor.metric_for("dns", DNS_OUT)
-        self.assertTrue(ok); self.assertEqual(u, "ms")
+        self.assertTrue(ok)
+        self.assertEqual(u, "ms")
         self.assertTrue(monitor.metric_for("dig", DIG_OUT)[0])
 
 

@@ -13,7 +13,8 @@
       <span class="name">ProbeDeck</span>
     </div>
     <p class="login-sub">link &amp; path diagnostics</p>
-    {% if bad %}<p class="login-err">Invalid username or password.</p>{% endif %}
+    {% if locked %}<p class="login-err">Too many attempts. Try again in {{ locked }}s.</p>
+    {% elif bad %}<p class="login-err">Invalid username or password.</p>{% endif %}
     <label class="fld"><span>user</span>
       <input name="username" autocomplete="username" autofocus required></label>
     <label class="fld"><span>pass</span>

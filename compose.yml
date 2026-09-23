@@ -17,6 +17,12 @@ services:
       # from the host, so enable this if it's reachable beyond a trusted subnet.
       # - PROBEDECK_AUTH_USER=admin
       # - PROBEDECK_AUTH_PASS=change-me
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
     # With host networking the app listens on 0.0.0.0:8080 on the host.
     # Bind it to LAN only and/or front it with auth. See README.

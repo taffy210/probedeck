@@ -31,11 +31,29 @@ async def lifespan(app):
         yield
     finally:
         task.cancel()
+        # Don't let long probes (tcpdump, nmap, traceroute) outlive the server.
+        runner.kill_all()
 
 
 app = FastAPI(title="ProbeDeck", lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+def _fmt_local(iso):
+    """Render a stored UTC ISO timestamp in the configured display timezone
+    (PROBEDECK_TZ). Used by the maintenance table for one-off windows."""
+    from datetime import datetime, timezone
+    try:
+        dt = datetime.fromisoformat(iso)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(monitor.LOCAL_TZ).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return iso
+
+
+templates.env.filters["localdt"] = _fmt_local
 
 db.init_db()
 
@@ -164,7 +182,8 @@ async def require_login(request: Request, call_next):
         # Agent API is authenticated by per-vantage token (checked in-handler),
         # not the login cookie, so it bypasses the redirect.
         is_open = (path in ("/login", "/status", "/statusbars", "/sw.js",
-                            "/agent.py", "/agent/jobs", "/agent/results")
+                            "/agent.py", "/agent/jobs", "/agent/results",
+                            "/healthz")
                    or path.startswith("/static"))
         if not is_open and not auth.valid_token(request.cookies.get(auth.COOKIE_NAME, "")):
             if request.headers.get("hx-request") == "true":
@@ -187,11 +206,20 @@ async def login_submit(request: Request,
                        username: str = Form(...), password: str = Form(...)):
     if not auth.ENABLED:
         return RedirectResponse("/", status_code=303)
+    ip = request.client.host if request.client else "?"
+    locked = auth.login_locked(ip)
+    if locked:
+        return templates.TemplateResponse(
+            "login.html", {"request": request, "bad": True, "locked": locked},
+            status_code=429)
     if auth.check_credentials(username, password):
+        auth.record_login_success(ip)
         resp = RedirectResponse("/", status_code=303)
         resp.set_cookie(auth.COOKIE_NAME, auth.issue_token(),
-                        max_age=auth.MAX_AGE, httponly=True, samesite="lax")
+                        max_age=auth.MAX_AGE, httponly=True, samesite="lax",
+                        secure=auth.SECURE_COOKIE)
         return resp
+    auth.record_login_failure(ip)
     return templates.TemplateResponse("login.html", {"request": request, "bad": True},
                                       status_code=401)
 
@@ -210,6 +238,18 @@ async def service_worker():
     return FileResponse(
         os.path.join("static", "sw.js"), media_type="application/javascript",
         headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
+
+
+@app.get("/healthz")
+async def healthz():
+    """Liveness/readiness probe: confirms the process is up and the DB answers.
+    Unauthenticated (listed in the open paths) so container orchestrators can
+    hit it without a session."""
+    try:
+        db.list_monitors()
+        return JSONResponse({"status": "ok"})
+    except Exception as e:
+        return JSONResponse({"status": "error", "detail": str(e)}, status_code=503)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -553,6 +593,7 @@ async def dashboard(request: Request):
         "vantages": db.list_vantages(),
         "base_url": str(request.base_url).rstrip("/"),
         "auth_enabled": auth.ENABLED,
+        "tz_label": monitor.tz_label(),
     })
 
 
@@ -617,7 +658,10 @@ async def status_bars(request: Request):
 # --- maintenance windows --------------------------------------------------
 
 def _norm_dt(s):
-    """Normalise a datetime-local value to a tz-aware (UTC) ISO string."""
+    """Normalise a datetime-local value to a tz-aware (UTC) ISO string. The
+    browser sends wall-clock time with no zone, so a naive value is read as
+    being in the configured display timezone (PROBEDECK_TZ, default UTC) and
+    converted to UTC for storage and comparison."""
     from datetime import datetime, timezone
     s = (s or "").strip().replace(" ", "T")
     if not s:
@@ -632,14 +676,14 @@ def _norm_dt(s):
     if dt is None:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.isoformat()
+        dt = dt.replace(tzinfo=monitor.LOCAL_TZ)
+    return dt.astimezone(timezone.utc).isoformat()
 
 
 def _maintenance_response(request):
     return templates.TemplateResponse("_maintenance.html", {
         "request": request, "windows": db.list_maintenance(),
-        "monitors": db.list_monitors()})
+        "monitors": db.list_monitors(), "tz_label": monitor.tz_label()})
 
 
 @app.get("/maintenance", response_class=HTMLResponse)

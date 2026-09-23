@@ -9,13 +9,30 @@ no-shell / validated-target guarantees hold here too.
 """
 import asyncio
 import json
+import os
 import re
 import urllib.request
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import db
 import summarize
 from tools import TOOLS
+
+# Maintenance windows are entered in the operator's wall-clock time. Set
+# PROBEDECK_TZ to an IANA name (e.g. "Europe/London") to interpret and display
+# them in that zone; the default, UTC, preserves the historical behaviour. All
+# other timestamps stay UTC internally. (The Docker image ships `tzdata`, so
+# the zone database is present even on slim bases.)
+_TZ_NAME = os.environ.get("PROBEDECK_TZ", "UTC")
+try:
+    LOCAL_TZ = ZoneInfo(_TZ_NAME)
+except (ZoneInfoNotFoundError, ValueError):
+    LOCAL_TZ, _TZ_NAME = timezone.utc, "UTC"
+
+
+def tz_label():
+    return _TZ_NAME
 
 # Tools that yield a meaningful scalar to trend. tcpdump/whois/dns are excluded
 # from monitoring because there's nothing useful to plot over time.
@@ -174,9 +191,10 @@ def _evaluate(mon, ok, value, loss):
 def in_maintenance(monitor_id, now=None):
     """Is the monitor inside an active maintenance window right now? Windows
     with a NULL monitor_id apply to every monitor. Daily windows compare the
-    UTC time-of-day and handle ranges that wrap past midnight."""
+    local (PROBEDECK_TZ) time-of-day and handle ranges that wrap past midnight;
+    one-off windows are absolute instants stored in UTC."""
     now = now or datetime.now(timezone.utc)
-    tod = now.strftime("%H:%M")
+    tod = now.astimezone(LOCAL_TZ).strftime("%H:%M")
     for w in db.list_maintenance():
         if w["monitor_id"] is not None and w["monitor_id"] != monitor_id:
             continue

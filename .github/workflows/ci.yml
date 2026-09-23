@@ -6,6 +6,18 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ruff
+        run: pip install ruff==0.8.4
+      - name: Lint
+        run: ruff check .
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -16,7 +28,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install --no-cache-dir -r app/requirements.txt
+        run: pip install --no-cache-dir -r app/requirements-dev.txt
 
       - name: Run test suite
         working-directory: app

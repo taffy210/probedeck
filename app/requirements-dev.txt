@@ -1,0 +1,5 @@
+# Test- and lint-only dependencies. NOT installed into the runtime image;
+# used by CI and for running the suite locally.
+-r requirements.txt
+httpx==0.28.1   # FastAPI's TestClient transport
+ruff==0.8.4

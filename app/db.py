@@ -1,9 +1,17 @@
 import sqlite3
 import os
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 
 DATA_DIR = os.environ.get("PROBEDECK_DATA", "/data")
 DB_PATH = os.path.join(DATA_DIR, "probedeck.db")
+
+# Sample retention. A monitor keeps at most SAMPLE_MAX_ROWS samples and none
+# older than SAMPLE_RETENTION_DAYS, whichever is tighter. The old fixed cap of
+# 200 rows meant a 60s monitor only ever held ~3h of history (so uptime and the
+# detail chart barely looked back); these defaults give days, and stay bounded.
+SAMPLE_MAX_ROWS = int(os.environ.get("PROBEDECK_MAX_SAMPLES", "5000"))
+SAMPLE_RETENTION_DAYS = float(os.environ.get("PROBEDECK_RETENTION_DAYS", "14"))
 
 
 def init_db():
@@ -140,8 +148,15 @@ def init_db():
 
 @contextmanager
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
+    # timeout + busy_timeout let a writer wait for a concurrent one instead of
+    # failing outright; WAL lets readers (dashboard, status board, websocket
+    # tail) run while the scheduler writes samples. Without these, the
+    # background sampler and the web handlers race to "database is locked".
+    conn = sqlite3.connect(DB_PATH, timeout=5.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA synchronous=NORMAL")
     try:
         yield conn
         conn.commit()
@@ -293,11 +308,19 @@ def add_sample(monitor_id, ts, ok, value, unit, loss):
             """INSERT INTO samples (monitor_id, ts, ok, value, unit, loss)
                VALUES (?,?,?,?,?,?)""",
             (monitor_id, ts, 1 if ok else 0, value, unit, loss))
-        # Keep only the most recent 200 samples per monitor.
+        # Retention: drop anything past the age window, then cap the row count
+        # as a hard backstop so a fast monitor can't grow the table unbounded.
+        # (ts is a uniform UTC ISO-8601 string, so a lexicographic compare on
+        # the cutoff is a chronological one.)
+        if SAMPLE_RETENTION_DAYS > 0:
+            cutoff = (datetime.now(timezone.utc)
+                      - timedelta(days=SAMPLE_RETENTION_DAYS)).isoformat()
+            c.execute("DELETE FROM samples WHERE monitor_id=? AND ts < ?",
+                      (monitor_id, cutoff))
         c.execute(
             """DELETE FROM samples WHERE monitor_id=? AND id NOT IN
-               (SELECT id FROM samples WHERE monitor_id=? ORDER BY id DESC LIMIT 200)""",
-            (monitor_id, monitor_id))
+               (SELECT id FROM samples WHERE monitor_id=? ORDER BY id DESC LIMIT ?)""",
+            (monitor_id, monitor_id, SAMPLE_MAX_ROWS))
 
 
 def list_samples(monitor_id, limit=60):
@@ -375,8 +398,10 @@ def ack_incidents():
         c.execute("UPDATE incidents SET acked=1")
 
 
-def sample_stats(monitor_id, limit=200):
+def sample_stats(monitor_id, limit=None):
     """Return (total, ok_count) over the retained sample window for uptime."""
+    if limit is None:
+        limit = SAMPLE_MAX_ROWS
     with get_conn() as c:
         row = c.execute(
             """SELECT COUNT(*) AS n, COALESCE(SUM(ok),0) AS ok FROM

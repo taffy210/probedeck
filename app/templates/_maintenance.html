@@ -19,21 +19,21 @@
   <div class="maint-row maint-daily" hidden>
     <label class="fld inline mini"><span>from</span><input type="time" name="start_tod"></label>
     <label class="fld inline mini"><span>to</span><input type="time" name="end_tod"></label>
-    <span class="hint">UTC · repeats every day</span>
+    <span class="hint">{{ tz_label or 'UTC' }} · repeats every day</span>
   </div>
   <button class="mon-btn" type="submit">+ window</button>
 </form>
 
 {% if windows %}
 <table class="maint-table">
-  <thead><tr><th>scope</th><th>when (UTC)</th><th>reason</th><th></th></tr></thead>
+  <thead><tr><th>scope</th><th>when ({{ tz_label or 'UTC' }})</th><th>reason</th><th></th></tr></thead>
   <tbody>
   {% for w in windows %}
   <tr>
     <td>{{ w.monitor_label or 'all monitors' }}</td>
     <td class="mono">
       {% if w.kind == 'daily' %}daily {{ w.starts_at }}–{{ w.ends_at }}
-      {% else %}{{ w.starts_at[:16]|replace('T',' ') }} → {{ w.ends_at[:16]|replace('T',' ') }}{% endif %}
+      {% else %}{{ w.starts_at|localdt }} → {{ w.ends_at|localdt }}{% endif %}
     </td>
     <td>{{ w.label }}</td>
     <td><button type="button" class="micon del" title="Delete window"

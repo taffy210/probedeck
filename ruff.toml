@@ -1,0 +1,10 @@
+# Lint config for ProbeDeck. A deliberately conservative rule set: real errors
+# (undefined names, unused imports/vars) and pyflakes/pycodestyle warnings, not
+# style opinions that would churn the existing code. Line length is not
+# enforced (the tool table in tools.py is intentionally column-aligned).
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]

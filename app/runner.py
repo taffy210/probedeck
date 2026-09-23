@@ -34,6 +34,17 @@ def cancel_job(job_id: str) -> bool:
         return True
     return False
 
+
+def kill_all() -> None:
+    """Kill every live probe subprocess. Called on app shutdown so a long
+    tcpdump/nmap/traceroute doesn't outlive the server it was spawned from."""
+    for proc in list(_PROCS.values()):
+        try:
+            if proc.returncode is None:
+                proc.kill()
+        except Exception:
+            pass
+
 # Coerce line buffering so tools flush output as it's produced instead of
 # letting libc sit on a full 4KB block buffer until the process exits (the
 # default when stdout is a pipe rather than a tty). Without this, "live"

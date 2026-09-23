@@ -160,8 +160,22 @@ All configuration is in **`compose.yml`** and a couple of environment variables.
 | `PROBEDECK_DATA` | `/data` | Where the SQLite db + run outputs live inside the container (mounted from `./data`). |
 | `PROBEDECK_AUTH_USER` | unset | Username for optional login. |
 | `PROBEDECK_AUTH_PASS` | unset | Password for optional login. Set **both** to require sign-in. |
+| `PROBEDECK_SECURE_COOKIE` | unset | Set to `1`/`true` when serving over HTTPS so the session cookie is flagged `Secure`. Leave unset for the plain-HTTP LAN default. |
+| `PROBEDECK_TZ` | `UTC` | IANA zone (e.g. `Europe/London`) for entering and displaying **maintenance windows**. All stored timestamps stay UTC. |
+| `PROBEDECK_MAX_SAMPLES` | `5000` | Max stored samples per monitor. |
+| `PROBEDECK_RETENTION_DAYS` | `14` | Samples older than this are pruned (whichever limit is tighter). |
 | Volume | `./data:/data` | Persists everything. Back this up. |
 | Caps | `NET_RAW`, `NET_ADMIN` | Raw sockets (mtr/ping/nmap) and packet capture (tcpdump). |
+| Healthcheck | `/healthz` | Unauthenticated liveness/readiness probe (used by the Compose `healthcheck`). |
+
+Login has basic brute-force protection: after 5 failed attempts from one IP
+(tunable via `PROBEDECK_LOGIN_MAX_TRIES` / `PROBEDECK_LOGIN_WINDOW` /
+`PROBEDECK_LOGIN_LOCKOUT`) that IP is locked out for 5 minutes.
+
+Operator-supplied `nmap` "extra" flags are restricted to a scanning allowlist —
+flags that write files (`-oN`/`-oX`/…), read host lists (`-iL`) or run NSE
+scripts (`--script`, `-A`) are rejected, so an exposed no-auth instance can't be
+turned into arbitrary file access.
 
 ### Run without host networking (bridge mode)
 
@@ -435,25 +449,30 @@ place), so your history, monitors, and incidents survive upgrades.
 
 ## Running the tests
 
-A stdlib `unittest` suite (no extra dependencies) covers the output parsers,
-metric extraction, fingerprinting, alert evaluation, target validation, path
-parsing, and the DB-backed incident / maintenance / vantage logic.
+A `unittest` suite covers the output parsers, metric extraction,
+fingerprinting, alert evaluation, target validation, path parsing, the
+DB-backed incident / maintenance / vantage logic, and the HTTP routes
+(via FastAPI's `TestClient`).
 
-In the running container:
+In the running container (the route tests self-skip there, since `httpx` is a
+dev-only dependency not shipped in the runtime image):
 
 ```bash
 docker exec -e PROBEDECK_DATA=/tmp/pdtest probedeck \
     python -m unittest discover -s tests -v
 ```
 
-Or locally with Python 3.12:
+Or locally with Python 3.12 (`requirements-dev.txt` adds `httpx` for the route
+tests and `ruff` for linting):
 
 ```bash
-pip install -r app/requirements.txt
+pip install -r app/requirements-dev.txt
 cd app && PROBEDECK_DATA=/tmp/pdtest python -m unittest discover -s tests
+ruff check .          # from the repo root
 ```
 
-CI (`.github/workflows/ci.yml`) runs the suite and a Docker build on every push.
+CI (`.github/workflows/ci.yml`) runs lint, the suite, and a Docker build on
+every push.
 
 ---
 
